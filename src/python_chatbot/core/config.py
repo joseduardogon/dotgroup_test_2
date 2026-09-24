@@ -24,7 +24,8 @@ class Settings(BaseSettings):
             OpenAI-compatible server). ``None`` uses the official endpoint.
         model: OpenAI chat model name (any chat-completions model, e.g. ``gpt-4o``).
         temperature: Sampling temperature; low values favour deterministic code answers.
-        max_tokens: Upper bound on generated tokens per answer.
+        max_tokens: Upper bound on generated tokens per answer. Reasoning models
+            also spend this budget on hidden thinking, so keep it generous.
         timeout_seconds: Per-request network timeout.
         max_retries: Automatic retries (exponential backoff) for transient failures.
         max_history_messages: Messages of context replayed to the model on each turn.
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     )
     model: str = Field(default="gpt-4o", min_length=1)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=1024, ge=1, le=16384)
+    max_tokens: int = Field(default=2048, ge=1, le=16384)
     timeout_seconds: float = Field(default=60.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=10)
     max_history_messages: int = Field(default=20, ge=0, le=200)

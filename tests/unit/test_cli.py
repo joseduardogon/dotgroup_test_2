@@ -1,5 +1,6 @@
 """End-to-end tests of the command line interface with an injected fake model."""
 
+import io
 from collections.abc import Iterator
 from typing import cast
 
@@ -12,11 +13,12 @@ from typer.testing import CliRunner
 from python_chatbot import __version__
 from python_chatbot.chat.assistant import PythonAssistant
 from python_chatbot.chat.memory import ConversationMemory
-from python_chatbot.cli.app import create_cli
+from python_chatbot.cli.app import create_cli, use_utf8_output
 from python_chatbot.core.config import Settings
 from tests.fakes import ScriptedChatModel, openai_error
 
 runner = CliRunner()
+NNBSP = chr(0x202F)
 
 
 def _cli(model: ScriptedChatModel, settings: Settings | None = None) -> typer.Typer:
@@ -227,3 +229,22 @@ def test_ctrl_c_cancels_only_the_current_answer() -> None:
     assert "Answer cancelled." in result.output
     assert "resposta completa" in result.output
     assert double.questions == ["primeira", "segunda"]
+
+
+def test_utf8_output_survives_characters_outside_the_ansi_code_page() -> None:
+    """A cp1252 stream crashes on a narrow no-break space; after the fix it writes UTF-8."""
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252")
+
+    with pytest.raises(UnicodeEncodeError):
+        stream.write("a" + NNBSP + "b")
+    use_utf8_output([stream])
+    stream.write("a" + NNBSP + "b ção")
+    stream.flush()
+
+    assert ("a" + NNBSP + "b ção").encode() in raw.getvalue()
+
+
+def test_utf8_output_ignores_streams_that_cannot_be_reconfigured() -> None:
+    """Objects without ``reconfigure`` (test capture buffers, custom streams) are skipped."""
+    use_utf8_output([io.StringIO()])

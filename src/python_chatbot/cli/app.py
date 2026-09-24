@@ -5,8 +5,9 @@ settings loader as parameters. Production uses the real ones; tests inject fakes
 commands are exercised end to end without a network or an API key.
 """
 
-from collections.abc import Callable
-from typing import Annotated
+import sys
+from collections.abc import Callable, Iterable
+from typing import Annotated, TextIO
 
 import typer
 from pydantic import ValidationError
@@ -161,6 +162,24 @@ def create_cli(
     return app
 
 
+def use_utf8_output(streams: Iterable[TextIO]) -> None:
+    """Make output streams UTF-8 so model text can never crash the terminal.
+
+    On Windows the standard streams fall back to the ANSI code page (cp1252) when they are
+    redirected, and models routinely emit characters outside it (narrow no-break space,
+    typographic quotes, emoji). Writing those raised ``UnicodeEncodeError`` in the middle of
+    an answer. Real consoles are unaffected because Python already writes to them as UTF-8.
+
+    Args:
+        streams: Text streams to reconfigure; those that cannot be reconfigured are skipped.
+    """
+    for stream in streams:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
     """Console-script entry point (``pychat``)."""
+    use_utf8_output((sys.stdout, sys.stderr))
     create_cli()()

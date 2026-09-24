@@ -11,12 +11,14 @@ e integrar com o LLM". O ecossistema oferece várias formas: `LLMChain`/`Convers
 
 ## Decisão
 
-Um pipeline **LCEL** de três etapas, `ChatPromptTemplate | ChatOpenAI | StrOutputParser`,
+Um pipeline **LCEL** `ChatPromptTemplate | ChatOpenAI`,
 com **memória explícita** mantida pela aplicação (`ConversationMemory`).
 
 * `ChatPromptTemplate` com `MessagesPlaceholder("history")`: regras (system), histórico e
   pergunta ficam separados; chaves `{}` digitadas pelo usuário nunca são interpretadas
   como variáveis do template (há teste).
+* Sem `StrOutputParser`: ele descartaria o `finish_reason`, que a execução real mostrou
+  ser necessário para avisar quando uma resposta foi cortada pelo limite de tokens.
 * O modelo é injetado como `BaseChatModel`: OpenAI em produção, `ScriptedChatModel` nos
   testes. Trocar de provedor é mudar uma fábrica.
 * LCEL entrega `invoke`, `stream`, `batch` e tracing do LangSmith sem código extra.

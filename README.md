@@ -43,10 +43,10 @@ em Python?"`. Design decisions are in `docs/adr/`, sample Q&A in `docs/examples.
 |---|---|
 | Receber perguntas via texto | `pychat chat` (conversa interativa) e `pychat ask "..."` (pergunta única) |
 | LangChain gerencia o fluxo e integra com o LLM | pipeline LCEL `ChatPromptTemplate \| ChatOpenAI \| StrOutputParser` + memória de conversa |
-| Responder com o modelo da OpenAI | `langchain-openai` (`gpt-4o` por padrão; qualquer modelo via `PYCHAT_MODEL`, ex.: `gpt-4`) |
+| Responder com o modelo da OpenAI | `langchain-openai` (`gpt-4o` por padrão; qualquer modelo via `PYCHAT_MODEL`, ex.: `gpt-4`; qualquer endpoint compatível via `OPENAI_BASE_URL`) |
 | LangSmith (título da questão) | tracing opt-in com tags e metadados por execução |
 | Configurar corretamente a API da OpenAI | `OPENAI_API_KEY` via ambiente/`.env`, validada por `pychat check` |
-| Exemplos de perguntas e respostas | [docs/examples.md](docs/examples.md) e [examples/questions.txt](examples/questions.txt) |
+| Exemplos de perguntas e respostas | [docs/examples.md](docs/examples.md) (saídas reais) e [examples/questions.txt](examples/questions.txt) |
 
 Extras: streaming token a token com renderização Markdown, memória por sessão, erros
 traduzidos com dicas, `--raw` para pipes, Docker, CI, ADRs, testes sem rede.
@@ -90,7 +90,7 @@ A chave nunca entra na imagem: é passada em tempo de execução. Também há
 | `OPENAI_BASE_URL` | oficial | endpoint alternativo (proxy, gateway, servidor compatível) |
 | `PYCHAT_MODEL` | `gpt-4o` | modelo de chat (ex.: `gpt-4`, `gpt-4o-mini`) |
 | `PYCHAT_TEMPERATURE` | `0.2` | baixa para respostas de código mais determinísticas |
-| `PYCHAT_MAX_TOKENS` | `1024` | limite de tokens por resposta |
+| `PYCHAT_MAX_TOKENS` | `2048` | limite de tokens por resposta (respostas cortadas ganham um aviso) |
 | `PYCHAT_MAX_HISTORY_MESSAGES` | `20` | janela de contexto reenviada ao modelo |
 | `PYCHAT_MAX_QUESTION_CHARS` | `4000` | tamanho máximo da pergunta |
 | `PYCHAT_TIMEOUT_SECONDS`, `PYCHAT_MAX_RETRIES` | `60`, `2` | rede e retentativas |
@@ -115,7 +115,7 @@ poetry run pytest --no-cov -m live -rs       # UMA chamada real e paga à OpenAI
 ### 3.1 Visão geral
 
 ```
-pychat (Typer/Rich) ──► PythonAssistant ──► prompt | ChatOpenAI | StrOutputParser ──► OpenAI
+pychat (Typer/Rich) ──► PythonAssistant ──► prompt | ChatOpenAI ──► OpenAI          
    cli/                   chat/assistant.py        (LCEL, llm/factory.py)               ▲
                               │  ▲                                                      │
                      ConversationMemory  └── traces (LangSmith) ────────────────────────┘
@@ -137,7 +137,7 @@ docs/adr/  decisões de arquitetura
 
 ### 3.2 O pipeline LangChain (`chat/assistant.py`, `chat/prompts.py`)
 
-`PythonAssistant` monta `build_prompt() | model | StrOutputParser()`
+`PythonAssistant` monta `build_prompt() | model`
 ([ADR 0001](docs/adr/0001-lcel-pipeline-and-explicit-memory.md)):
 
 1. **Prompt** (`ChatPromptTemplate`): system prompt versionado (persona de instrutor
@@ -147,7 +147,8 @@ docs/adr/  decisões de arquitetura
    `MessagesPlaceholder` para o histórico e a pergunta.
 2. **Modelo**: `ChatOpenAI` construído em `llm/factory.py` a partir das configurações e
    injetado como `BaseChatModel`.
-3. **Parser**: `StrOutputParser` devolve texto puro.
+3. **Saída**: o assistente lê o texto da mensagem e o `finish_reason`; se o provedor
+   cortou a resposta no limite de tokens, um aviso é anexado (e não vai para o histórico).
 
 `ask()` faz uma chamada única; `stream()` devolve fragmentos à medida que chegam e
 grava a troca na memória **somente se terminar com sucesso**.
@@ -197,14 +198,18 @@ de 95% e mypy estrito.
 
 ### 3.8 Limitações conhecidas
 
-- **Nenhuma resposta real do GPT foi obtida no desenvolvimento** (sem chave disponível).
-  O que foi verificado contra a OpenAI de verdade: uma requisição com chave falsa chegou
-  a `api.openai.com`, voltou 401 e foi traduzida para `LLMAuthenticationError`. O restante
-  do caminho de rede é validado pelo servidor local compatível. O teste `-m live` está
-  pronto para você rodar com sua chave, e as respostas de `docs/examples.md` são
-  ilustrativas até serem substituídas por uma execução real.
-- **O painel do LangSmith também não foi conferido** (sem chave): o envio de traces é
-  provado apenas contra um endpoint local.
+- **O modelo GPT-4 da OpenAI não foi exercitado** (sem créditos). A execução real do
+  desenvolvimento usou o `openai/gpt-oss-120b` na API gratuita da Groq, via
+  `OPENAI_BASE_URL`: o teste `-m live`, as 6 perguntas de `examples/questions.txt`, a
+  memória (com prova de `/reset`) e o erro de modelo inexistente foram executados de
+  verdade e as respostas em [docs/examples.md](docs/examples.md) são saídas reais e
+  não editadas. Contra a própria OpenAI só foi verificado o caminho de erro (chave falsa
+  -> 401 -> `LLMAuthenticationError`). Para GPT-4: remova `OPENAI_BASE_URL` e use
+  `PYCHAT_MODEL=gpt-4` (ou `gpt-4o`) com sua chave.
+- **O painel do LangSmith não foi conferido** (sem chave): o envio de traces é provado
+  apenas contra um endpoint local.
+- A execução real revelou e corrigiu dois defeitos (crash de codificação no Windows e
+  respostas cortadas sem aviso), descritos em `docs/examples.md`.
 - Memória em processo (uma instância); avaliação automática no LangSmith é o próximo
   passo natural ([ADR 0003](docs/adr/0003-observability-and-evaluation.md)).
 - Modelos de raciocínio (o-series/GPT-5) não aceitam qualquer `temperature`; ajuste

@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
+from python_chatbot.chat.assistant import TRUNCATION_NOTICE
 from python_chatbot.chat.factory import build_assistant
 from python_chatbot.core.config import Settings
 from python_chatbot.core.exceptions import (
@@ -38,12 +39,14 @@ class FakeOpenAI:
 
     Attributes:
         status: HTTP status returned to the next request(s).
+        finish_reason: Finish reason reported for successful completions.
         requests: Decoded JSON bodies of chat completion requests, in order.
         headers: Request headers of chat completion requests, in order.
         paths: ``(method, path)`` of every request the server saw, in order.
     """
 
     status: int = 200
+    finish_reason: str = "stop"
     requests: list[dict[str, Any]] = field(default_factory=list)
     headers: list[dict[str, str]] = field(default_factory=list)
     paths: list[tuple[str, str]] = field(default_factory=list)
@@ -99,7 +102,13 @@ def _handler_for(state: FakeOpenAI) -> type[BaseHTTPRequestHandler]:
                         "object": "chat.completion",
                         "created": 0,
                         "model": request["model"],
-                        "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": message,
+                                "finish_reason": state.finish_reason,
+                            }
+                        ],
                     },
                 )
 
@@ -116,7 +125,11 @@ def _handler_for(state: FakeOpenAI) -> type[BaseHTTPRequestHandler]:
                     "created": 0,
                     "model": "gpt-4o",
                     "choices": [
-                        {"index": 0, "delta": delta, "finish_reason": "stop" if finished else None}
+                        {
+                            "index": 0,
+                            "delta": delta,
+                            "finish_reason": state.finish_reason if finished else None,
+                        }
                     ],
                 }
                 self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
@@ -209,6 +222,7 @@ TRACING_SCRIPT = """
 import sys
 from langchain_core.tracers.langchain import wait_for_all_tracers
 from pydantic import SecretStr
+from python_chatbot.chat.assistant import TRUNCATION_NOTICE
 from python_chatbot.chat.factory import build_assistant
 from python_chatbot.core.config import Settings
 
@@ -257,3 +271,15 @@ def test_traces_are_sent_only_when_tracing_is_enabled(
     assert completed.returncode == 0, completed.stderr
     runs = [path for method, path in server.paths if method == "POST" and "/runs" in path]
     assert bool(runs) is expect_runs, server.paths
+
+
+def test_length_finish_reason_from_the_real_client_produces_the_notice(server: FakeOpenAI) -> None:
+    """The real client surfaces ``finish_reason`` so a cut answer is flagged, not silent."""
+    server.finish_reason = "length"
+    assistant = build_assistant(_settings(server))
+
+    answer = assistant.ask("Como criar uma lista em Python?")
+    streamed = "".join(assistant.stream("de novo"))
+
+    assert answer.endswith(TRUNCATION_NOTICE)
+    assert streamed.endswith(TRUNCATION_NOTICE)

@@ -4,7 +4,7 @@ from collections.abc import Generator
 
 import openai
 from langchain_core.language_models import BaseChatModel
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 
 from python_chatbot.chat.memory import ConversationMemory
@@ -20,6 +20,20 @@ from python_chatbot.core.exceptions import (
 
 DEFAULT_SESSION = "default"
 RUN_NAME = "python_assistant"
+TRUNCATION_NOTICE = "\n\n[Answer truncated by the token limit. Raise PYCHAT_MAX_TOKENS.]"
+_LENGTH_FINISH_REASON = "length"
+
+
+def _was_truncated(message: BaseMessage) -> bool:
+    """Tell whether the provider stopped generating because it hit the token limit.
+
+    Args:
+        message: A complete reply or the last streamed chunk.
+
+    Returns:
+        ``True`` when the finish reason is ``length``.
+    """
+    return message.response_metadata.get("finish_reason") == _LENGTH_FINISH_REASON
 
 
 def translate_provider_error(error: openai.OpenAIError) -> ChatbotError:
@@ -55,7 +69,7 @@ def translate_provider_error(error: openai.OpenAIError) -> ChatbotError:
 
 
 class PythonAssistant:
-    """Answers Python questions through ``prompt | chat model | parser``.
+    """Answers Python questions through ``prompt | chat model``.
 
     The pipeline is written in LangChain Expression Language (LCEL), which gives
     streaming, async, batching and LangSmith tracing without extra code. Each run is
@@ -79,7 +93,7 @@ class PythonAssistant:
             memory: Conversation store. A private one is created when omitted.
             max_question_chars: Longest accepted question.
         """
-        self._chain = build_prompt() | model | StrOutputParser()
+        self._chain = build_prompt() | model
         self._model_name = model_name
         self._memory = memory if memory is not None else ConversationMemory()
         self._max_question_chars = max_question_chars
@@ -92,7 +106,8 @@ class PythonAssistant:
             session_id: Conversation the question belongs to.
 
         Returns:
-            The assistant's complete answer.
+            The assistant's complete answer. When the provider cut it at the token limit,
+            :data:`TRUNCATION_NOTICE` is appended (it is not stored in the history).
 
         Raises:
             InvalidQuestionError: If the question is empty or too long.
@@ -100,11 +115,11 @@ class PythonAssistant:
         """
         cleaned, payload, config = self._prepare(question, session_id)
         try:
-            answer = self._chain.invoke(payload, config)
+            message = self._chain.invoke(payload, config)
         except openai.OpenAIError as exc:
             raise translate_provider_error(exc) from exc
-        self._commit(session_id, cleaned, answer)
-        return answer
+        self._commit(session_id, cleaned, message.text)
+        return message.text + TRUNCATION_NOTICE if _was_truncated(message) else message.text
 
     def stream(
         self, question: str, session_id: str = DEFAULT_SESSION
@@ -119,7 +134,8 @@ class PythonAssistant:
             session_id: Conversation the question belongs to.
 
         Yields:
-            Successive fragments of the answer.
+            Successive fragments of the answer, followed by :data:`TRUNCATION_NOTICE` when
+            the provider cut the answer at the token limit.
 
         Raises:
             InvalidQuestionError: If the question is empty or too long.
@@ -127,13 +143,18 @@ class PythonAssistant:
         """
         cleaned, payload, config = self._prepare(question, session_id)
         fragments: list[str] = []
+        truncated = False
         try:
-            for fragment in self._chain.stream(payload, config):
-                fragments.append(fragment)
-                yield fragment
+            for chunk in self._chain.stream(payload, config):
+                truncated = truncated or _was_truncated(chunk)
+                if chunk.text:
+                    fragments.append(chunk.text)
+                    yield chunk.text
         except openai.OpenAIError as exc:
             raise translate_provider_error(exc) from exc
         self._commit(session_id, cleaned, "".join(fragments))
+        if truncated:
+            yield TRUNCATION_NOTICE
 
     def reset(self, session_id: str = DEFAULT_SESSION) -> None:
         """Forget the conversation history of ``session_id``.
