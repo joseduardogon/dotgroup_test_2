@@ -58,7 +58,7 @@ def translate_provider_error(error: openai.OpenAIError) -> ChatbotError:
     if isinstance(error, openai.APIConnectionError | openai.InternalServerError):
         return LLMUnavailableError(
             "Could not reach the OpenAI API.",
-            hint="Check your connection or try again shortly; the request was retried already.",
+            hint="Check your connection and OPENAI_BASE_URL, then try again shortly.",
         )
     if isinstance(error, openai.NotFoundError):
         return LLMRequestError(
