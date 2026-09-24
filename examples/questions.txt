@@ -1,0 +1,6 @@
+Como criar uma lista em Python?
+Qual a diferença entre lista e tupla?
+Como ler um arquivo linha por linha de forma eficiente?
+O que são list comprehensions? Dê exemplos.
+Como tratar exceções com try/except/finally?
+Qual a capital da França?

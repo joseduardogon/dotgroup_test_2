@@ -1,0 +1,12 @@
+services:
+  chat:
+    build: .
+    image: dotgroup-test-2:latest
+    stdin_open: true
+    tty: true
+    env_file:
+      - path: .env
+        required: false
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
