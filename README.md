@@ -206,8 +206,11 @@ de 95% e mypy estrito.
   não editadas. Contra a própria OpenAI só foi verificado o caminho de erro (chave falsa
   -> 401 -> `LLMAuthenticationError`). Para GPT-4: remova `OPENAI_BASE_URL` e use
   `PYCHAT_MODEL=gpt-4` (ou `gpt-4o`) com sua chave.
-- **O painel do LangSmith não foi conferido** (sem chave): o envio de traces é provado
-  apenas contra um endpoint local.
+- **LangSmith verificado no painel real** (2026-09-23): uma execução de `pychat ask` com
+  `LANGSMITH_TRACING=true` apareceu no projeto `dotgroup-test-2` como `python_assistant`,
+  com as tags `prompt:1.0` e `model:openai/gpt-oss-120b` e os metadados `session_id`,
+  `history_messages` e `prompt_version`, além do prompt, da resposta, do tempo e dos
+  tokens. Conferido manualmente pelo autor; não há teste automático contra o serviço real.
 - A execução real revelou e corrigiu dois defeitos (crash de codificação no Windows e
   respostas cortadas sem aviso), descritos em `docs/examples.md`.
 - Memória em processo (uma instância); avaliação automática no LangSmith é o próximo
