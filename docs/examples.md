@@ -52,7 +52,7 @@ letras = list("Python")
 print("Lista a partir de string:", letras)
 
 # 3. Compreensão de lista: quadrados de 0 a 4
-quadrados = [x ** 2 for x in range(5)]
+quadrados = [x**2 for x in range(5)]
 print("Compreensão de lista:", quadrados)
 
 # 4. Lista de valores repetidos
@@ -136,8 +136,8 @@ def demonstra_mutabilidade():
     lista = [1, 2, 3]
     print("Lista original:", lista)
 
-    lista.append(4)          # adiciona elemento
-    lista[0] = 10            # altera elemento existente
+    lista.append(4)  # adiciona elemento
+    lista[0] = 10  # altera elemento existente
     print("Lista após modificações:", lista)
 
     # Tupla imutável
@@ -145,15 +145,16 @@ def demonstra_mutabilidade():
     print("\nTupla original:", tupla)
 
     try:
-        tupla += (4,)        # cria uma nova tupla (não altera a original)
+        tupla += (4,)  # cria uma nova tupla (não altera a original)
         print("Tupla após concatenação:", tupla)
-        tupla[0] = 10        # tenta modificar -> erro
+        tupla[0] = 10  # tenta modificar -> erro
     except TypeError as e:
         print("Erro ao modificar tupla:", e)
 
     # Tupla como chave de dicionário
     mapa = {tupla: "valor associado"}
     print("\nAcesso ao dicionário usando a tupla como chave:", mapa[tupla])
+
 
 if __name__ == "__main__":
     demonstra_mutabilidade()
@@ -185,7 +186,7 @@ Acesso ao dicionário usando a tupla como chave: valor associado
 - **Mutabilidade de objetos internos**: Uma tupla pode conter objetos mutáveis (ex.: listas). Nesse caso, a tupla em si é imutável, mas seu conteúdo pode mudar, tornando‑a **não hashable**. Ex.:
 
   ```python
-  t = ([1, 2], 3)   # t não pode ser usado como chave de dict
+  t = ([1, 2], 3)  # t não pode ser usado como chave de dict
   ```
 
 - **Performance enganosa**: A diferença de velocidade entre listas e tuplas costuma ser insignificante para a maioria dos programas; escolha a estrutura que melhor expressa a intenção do seu código.
@@ -233,22 +234,24 @@ Use o objeto de arquivo como um iterador dentro de um bloco `with`; assim o Pyth
 # exemplo.py
 from pathlib import Path
 
+
 def contar_linhas(path: Path) -> int:
     """Retorna a quantidade de linhas do arquivo, lendo uma a uma."""
     total = 0
     # O modo 'r' abre para leitura de texto; o encoding padrão é UTF‑8 a partir do 3.10.
-    with path.open('r', encoding='utf-8') as f:
-        for linha in f:          # iteração linha a linha
+    with path.open("r", encoding="utf-8") as f:
+        for linha in f:  # iteração linha a linha
             total += 1
             # aqui você pode processar a linha, por exemplo:
             # print(linha.rstrip())
     return total
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Cria um arquivo de teste grande (10 000 linhas) apenas para demonstração.
-    teste = Path('arquivo_grande.txt')
+    teste = Path("arquivo_grande.txt")
     if not teste.exists():
-        with teste.open('w', encoding='utf-8') as out:
+        with teste.open("w", encoding="utf-8") as out:
             for i in range(1, 10_001):
                 out.write(f"Linha {i}\n")
 
@@ -293,7 +296,7 @@ Número total de linhas: 10000
 A forma mais “Pythonic” e eficiente de ler um arquivo linha a linha é:
 
 ```python
-with open('caminho/arquivo.txt', 'r', encoding='utf-8') as f:
+with open("caminho/arquivo.txt", "r", encoding="utf-8") as f:
     for linha in f:
         # processar a linha aqui
         ...
@@ -322,7 +325,7 @@ Em Python, antes das *list comprehensions* era comum usar um `for` tradicional p
 ```python
 resultado = []
 for x in range(10):
-    if x % 2 == 0:          # opcional: filtro
+    if x % 2 == 0:  # opcional: filtro
         resultado.append(x * x)
 ```
 
@@ -369,7 +372,7 @@ print(maiúsculas)
 
 # 4. Criar pares (tupla) a partir de duas listas (produto cartesiano)
 a = [1, 2]
-b = ['x', 'y']
+b = ["x", "y"]
 pares = [(i, j) for i in a for j in b]
 print(pares)
 # Saída: [(1, 'x'), (1, 'y'), (2, 'x'), (2, 'y')]
@@ -472,10 +475,11 @@ def dividir(a, b):
         # Sempre executado: aqui liberamos recursos fictícios
         print("Finalizando a operação de divisão.\n")
 
+
 # Testes
-print(dividir(10, 2))   # Caso normal
-print(dividir(10, 0))   # ZeroDivisionError
-print(dividir(10, "a")) # TypeError
+print(dividir(10, 2))  # Caso normal
+print(dividir(10, 0))  # ZeroDivisionError
+print(dividir(10, "a"))  # TypeError
 ```
 
 #### Saída esperada
@@ -509,7 +513,7 @@ None
 
   ```python
   with open("dados.txt", "r") as f:
-      conteudo = f.read()   # O arquivo será fechado automaticamente.
+      conteudo = f.read()  # O arquivo será fechado automaticamente.
   ```
 
 - **`contextlib.suppress`**: suprime exceções específicas sem precisar de `except` explícito.
