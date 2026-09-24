@@ -18,7 +18,7 @@ ask: ## Ask one question: make ask Q="Como criar uma lista em Python?"
 	poetry run pychat ask "$(Q)"
 
 demo: ## Run every question in examples/questions.txt (needs OPENAI_API_KEY)
-	@while IFS= read -r q; do echo "\n### $$q"; poetry run pychat ask --raw "$$q"; done < examples/questions.txt
+	@while IFS= read -r q; do printf "\n### %s\n" "$$q"; poetry run pychat ask --raw "$$q"; done < examples/questions.txt
 
 test: ## Offline test suite with coverage (no API key needed)
 	poetry run pytest

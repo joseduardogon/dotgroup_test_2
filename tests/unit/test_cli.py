@@ -1,5 +1,8 @@
 """End-to-end tests of the command line interface with an injected fake model."""
 
+from collections.abc import Iterator
+from typing import cast
+
 import openai
 import pytest
 import typer
@@ -186,3 +189,41 @@ def test_every_command_has_help(command: str) -> None:
 
     assert result.exit_code == 0
     assert "Usage" in result.output
+
+
+class _InterruptedOnce:
+    """Assistant double whose first streamed answer is cancelled with Ctrl-C."""
+
+    def __init__(self) -> None:
+        """Start with no calls recorded."""
+        self.questions: list[str] = []
+        self.resets: list[str] = []
+
+    def stream(self, question: str, session_id: str) -> Iterator[str]:
+        """Interrupt the first answer, then answer normally."""
+        self.questions.append(question)
+        self.resets.append(f"stream:{session_id}")
+        if len(self.questions) == 1:
+            yield "parcial"
+            raise KeyboardInterrupt
+        yield "resposta completa"
+
+    def reset(self, session_id: str) -> None:
+        """Record a reset request."""
+        self.resets.append(session_id)
+
+
+def test_ctrl_c_cancels_only_the_current_answer() -> None:
+    """Interrupting a streaming answer returns to the prompt instead of killing the chat."""
+    double = _InterruptedOnce()
+    cli = create_cli(
+        factory=lambda _settings: cast("PythonAssistant", double),
+        settings_loader=lambda: Settings(openai_api_key=SecretStr("sk"), _env_file=None),
+    )
+
+    result = runner.invoke(cli, ["chat"], input="primeira\nsegunda\n/exit\n")
+
+    assert result.exit_code == 0
+    assert "Answer cancelled." in result.output
+    assert "resposta completa" in result.output
+    assert double.questions == ["primeira", "segunda"]

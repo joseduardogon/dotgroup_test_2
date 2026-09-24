@@ -28,7 +28,8 @@ def run_repl(
     """Run the chat loop until the user leaves.
 
     Recoverable problems (empty input, rate limits, network errors) are reported and the
-    loop continues, so one bad turn never ends the session.
+    loop continues, so one bad turn never ends the session. Ctrl-C while an answer is
+    streaming cancels only that answer (nothing is remembered); at the prompt it leaves.
 
     Args:
         assistant: The assistant answering the questions.
@@ -61,3 +62,5 @@ def run_repl(
             render_stream(console, assistant.stream(line, session_id), raw=raw)
         except ChatbotError as error:
             render_error(error_console, error)
+        except KeyboardInterrupt:
+            console.print("\n[dim]Answer cancelled.[/]")

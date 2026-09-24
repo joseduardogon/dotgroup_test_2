@@ -14,8 +14,8 @@ streaming funcionam de verdade.
 | Nível | O que é | O que prova | Roda por padrão |
 |---|---|---|---|
 | Unitário | `ScriptedChatModel` (BaseChatModel falso que grava os prompts) | prompt enviado, histórico, janela, validação, tradução de erros, tags do LangSmith, CLI | sim |
-| Wire | cliente **real** `langchain-openai` contra um servidor HTTP local que imita `/v1/chat/completions` (SSE inclusive) | corpo do request (modelo, temperatura, mensagens), header `Authorization`, parsing de streaming, HTTP 401/429/500 -> erros de domínio | sim |
-| Live | uma chamada real à OpenAI com a pergunta do enunciado | integração de ponta a ponta | não (`-m live`, exige chave e custa) |
+| Wire | cliente **real** `langchain-openai` contra um servidor HTTP local que imita `/v1/chat/completions` (SSE inclusive) e também o endpoint do LangSmith | corpo do request (modelo, temperatura, mensagens), header `Authorization`, parsing de streaming, HTTP 401/429/500 -> erros de domínio, e que traces **saem do processo** só quando o tracing está ligado (subprocesso novo, com controle negativo) | sim |
+| Live | uma chamada real à OpenAI com a pergunta do enunciado | integração de ponta a ponta | não (`-m live`, exige chave e custa); sem chave é *skipped* com o motivo |
 
 Complementos: `filterwarnings = error`, cobertura mínima de 95% e nenhuma dependência de
 variáveis do ambiente do desenvolvedor (fixture `autouse` limpa `OPENAI_*`/`LANGSMITH_*`).

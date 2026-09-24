@@ -22,7 +22,7 @@ class ScriptedChatModel(BaseChatModel):
     """
 
     responses: list[str] = Field(default_factory=lambda: ["ok"])
-    error: Exception | None = None
+    error: BaseException | None = None
     error_after_chunks: int | None = None
     _calls: list[list[BaseMessage]] = PrivateAttr(default_factory=list)
 

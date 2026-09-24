@@ -18,6 +18,12 @@ não há como depurar nem comparar versões do prompt.
   `model:<nome>`) e metadados (`session_id`, `history_messages`, `prompt_version`), o que
   permite filtrar e comparar no LangSmith. Um teste garante essas marcas usando
   `collect_runs`, sem rede.
+* **Prova de envio**: o SDK do LangSmith faz cache de leituras do ambiente (`lru_cache`),
+  então exportar variáveis depois dos imports poderia falhar em silêncio. Um teste roda
+  um interpretador novo (como a CLI) com `LANGSMITH_ENDPOINT` apontando para um servidor
+  local e exige um `POST /runs...`; o mesmo cenário com tracing desligado (controle
+  negativo) não pode enviar nada. Isso valida o mecanismo, **não** o painel real do
+  LangSmith, que só pode ser conferido com uma chave.
 * O prompt tem versão explícita (`PROMPT_VERSION`) e vive em código, revisável em PR.
 * `pychat check` valida a configuração sem chamar serviço externo.
 

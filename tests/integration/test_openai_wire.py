@@ -8,6 +8,8 @@ into the application's errors. No API key, no internet and no cost.
 """
 
 import json
+import subprocess
+import sys
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -36,13 +38,15 @@ class FakeOpenAI:
 
     Attributes:
         status: HTTP status returned to the next request(s).
-        requests: Decoded JSON bodies received, in order.
-        headers: Request headers received, in order.
+        requests: Decoded JSON bodies of chat completion requests, in order.
+        headers: Request headers of chat completion requests, in order.
+        paths: ``(method, path)`` of every request the server saw, in order.
     """
 
     status: int = 200
     requests: list[dict[str, Any]] = field(default_factory=list)
     headers: list[dict[str, str]] = field(default_factory=list)
+    paths: list[tuple[str, str]] = field(default_factory=list)
     base_url: str = ""
 
 
@@ -64,10 +68,20 @@ def _handler_for(state: FakeOpenAI) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(body)
 
+        def do_GET(self) -> None:
+            """Answer any GET (e.g. LangSmith's ``/info`` probe) with an empty object."""
+            state.paths.append(("GET", self.path))
+            self._send_json(200, {})
+
         def do_POST(self) -> None:
-            """Handle a chat completion request."""
+            """Handle a chat completion request; acknowledge any other POST (LangSmith runs)."""
             length = int(self.headers.get("Content-Length", "0"))
-            request = json.loads(self.rfile.read(length))
+            raw = self.rfile.read(length)
+            state.paths.append(("POST", self.path))
+            if not self.path.endswith("/chat/completions"):
+                self._send_json(200, {})
+                return
+            request = json.loads(raw)
             state.requests.append(request)
             state.headers.append({k.lower(): v for k, v in self.headers.items()})
             if state.status != 200:
@@ -189,3 +203,57 @@ def test_real_http_failures_become_application_errors(
 
     with pytest.raises(expected):
         assistant.ask("qualquer coisa")
+
+
+TRACING_SCRIPT = """
+import sys
+from langchain_core.tracers.langchain import wait_for_all_tracers
+from pydantic import SecretStr
+from python_chatbot.chat.factory import build_assistant
+from python_chatbot.core.config import Settings
+
+openai_url, langsmith_url, tracing = sys.argv[1:4]
+settings = Settings(
+    openai_api_key=SecretStr("sk-wire-test"),
+    openai_base_url=openai_url,
+    max_retries=0,
+    langsmith_tracing=tracing == "on",
+    langsmith_api_key=SecretStr("lsv2-wire-test"),
+    langsmith_endpoint=langsmith_url,
+    _env_file=None,
+)
+build_assistant(settings).ask("Como criar uma lista em Python?")
+wait_for_all_tracers()
+"""
+
+
+@pytest.mark.parametrize(("tracing", "expect_runs"), [("on", True), ("off", False)])
+def test_traces_are_sent_only_when_tracing_is_enabled(
+    server: FakeOpenAI, tracing: str, expect_runs: bool
+) -> None:
+    """A trace leaves the process if and only if tracing is switched on in our settings.
+
+    Runs in a fresh interpreter, exactly like the CLI: the LangSmith SDK caches
+    environment lookups, so this proves that exporting the variables at start-up (after
+    the modules were imported) is early enough for traces to be emitted, and the ``off``
+    case is the negative control that keeps the test honest. The local server plays both
+    OpenAI and LangSmith.
+    """
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            TRACING_SCRIPT,
+            server.base_url,
+            server.base_url.removesuffix("/v1"),
+            tracing,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    runs = [path for method, path in server.paths if method == "POST" and "/runs" in path]
+    assert bool(runs) is expect_runs, server.paths

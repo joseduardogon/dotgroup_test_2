@@ -24,8 +24,14 @@ ENV_VARS = (
 
 
 @pytest.fixture(autouse=True)
-def _clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove every variable the application reads so tests never see the host's."""
+def _clean_environment(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove every variable the application reads so tests never see the host's.
+
+    Tests marked ``live`` are the exception: they exist precisely to use the developer's
+    real credentials, so the environment is left untouched for them.
+    """
+    if request.node.get_closest_marker("live"):
+        return
     for name in ENV_VARS:
         monkeypatch.delenv(name, raising=False)
 

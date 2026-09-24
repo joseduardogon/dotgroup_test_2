@@ -68,6 +68,7 @@ poetry run pychat ask "Como criar uma lista em Python?"
 ```
 
 Comandos do `chat`: `/help`, `/reset` (esquece a conversa), `/exit` (ou Ctrl-D).
+Ctrl-C durante uma resposta cancela apenas aquela resposta (nada é memorizado).
 `pychat ask --raw "..."` imprime texto puro, ideal para pipes.
 
 ### Docker
@@ -104,7 +105,7 @@ Ligar o tracing sem `LANGSMITH_API_KEY` é um erro de configuração já na inic
 make check                                  # ruff + mypy --strict + pytest com cobertura (>= 95%)
 poetry run pytest --no-cov tests/unit       # apenas unitários
 poetry run pytest --no-cov -m integration   # cliente real da OpenAI contra servidor HTTP local
-poetry run pytest --no-cov -m live          # UMA chamada real e paga à OpenAI (exige chave)
+poetry run pytest --no-cov -m live -rs       # UMA chamada real e paga à OpenAI (sem chave: skipped)
 ```
 
 ---
@@ -172,6 +173,8 @@ conteúdo) são reportadas e não gravadas.
 Com `LANGSMITH_TRACING=true`, cada execução vira um trace com `run_name`, tags
 (`prompt:1.0`, `model:<nome>`) e metadados (`session_id`, `history_messages`). As variáveis
 vindas do `.env` são exportadas antes da primeira chamada, já que o SDK só lê o ambiente.
+Como o SDK faz cache dessas leituras, um teste em interpretador novo prova que os traces
+realmente saem do processo (e não saem com o tracing desligado).
 
 ### 3.6 Segurança e custo ([ADR 0004](docs/adr/0004-security-and-cost-controls.md))
 
@@ -185,7 +188,8 @@ imagem, limites de tamanho/tokens/histórico/retentativas, container não-root e
   LangSmith e a CLI de ponta a ponta.
 - **Wire**: o cliente **real** `langchain-openai` fala HTTP com um servidor local que imita
   `/v1/chat/completions` (incluindo streaming SSE), validando o corpo do request, o header
-  `Authorization`, o parsing do stream e os erros HTTP 401/429/500.
+  `Authorization`, o parsing do stream e os erros HTTP 401/429/500; o mesmo servidor imita o
+  LangSmith para provar que os traces são enviados.
 - **Live** (opt-in): uma chamada real com a pergunta do enunciado.
 
 Tudo, exceto o live, roda offline e sem chave. `filterwarnings = error`, cobertura mínima
@@ -193,9 +197,14 @@ de 95% e mypy estrito.
 
 ### 3.8 Limitações conhecidas
 
-- **A chamada real à OpenAI não foi executada no desenvolvimento** (sem chave disponível):
-  o caminho de rede é validado pelo servidor local compatível, e o teste `-m live` fica
-  pronto para você rodar. As respostas em `docs/examples.md` são ilustrativas.
+- **Nenhuma resposta real do GPT foi obtida no desenvolvimento** (sem chave disponível).
+  O que foi verificado contra a OpenAI de verdade: uma requisição com chave falsa chegou
+  a `api.openai.com`, voltou 401 e foi traduzida para `LLMAuthenticationError`. O restante
+  do caminho de rede é validado pelo servidor local compatível. O teste `-m live` está
+  pronto para você rodar com sua chave, e as respostas de `docs/examples.md` são
+  ilustrativas até serem substituídas por uma execução real.
+- **O painel do LangSmith também não foi conferido** (sem chave): o envio de traces é
+  provado apenas contra um endpoint local.
 - Memória em processo (uma instância); avaliação automática no LangSmith é o próximo
   passo natural ([ADR 0003](docs/adr/0003-observability-and-evaluation.md)).
 - Modelos de raciocínio (o-series/GPT-5) não aceitam qualquer `temperature`; ajuste
