@@ -590,7 +590,7 @@ Hint: Export it or put it in a .env file (see .env.example).
 
 ## 9. O que a execução real revelou
 
-Dois defeitos que nenhum teste offline pegaria, ambos corrigidos com teste de regressão:
+Três defeitos que nenhum teste offline pegaria, todos corrigidos com teste de regressão:
 
 1. **Crash de codificação.** O primeiro `pychat ask` real derrubou o CLI com
    `UnicodeEncodeError`: no Windows, com a saída redirecionada (code page cp1252), um
@@ -607,3 +607,8 @@ Dois defeitos que nenhum teste offline pegaria, ambos corrigidos com teste de re
 
 [Answer truncated by the token limit. Raise PYCHAT_MAX_TOKENS.]
 ```
+3. **Streaming duplicado no terminal** (achado pelo autor no PowerShell). O quadro do
+   `Live` continha a resposta inteira; quando passava da altura da tela, as linhas que
+   rolaram não podiam ser apagadas e cada atualização deixava outra cópia. Correção: durante
+   o streaming só a cauda é desenhada (sempre menor que o terminal) e o Markdown completo é
+   impresso uma vez no final.

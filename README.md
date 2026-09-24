@@ -10,7 +10,7 @@
 ## English summary
 
 A terminal chatbot that answers Python programming questions with an OpenAI chat model,
-orchestrated by LangChain (LCEL: `prompt | model | parser`), with streaming, bounded
+orchestrated by LangChain (LCEL: `prompt | model`), with streaming, bounded
 conversation memory, friendly error handling and optional LangSmith tracing. The model is
 injected, so the whole suite (unit, wire-level and CLI tests) runs offline without an API
 key; a single opt-in test exercises the real API. Try it: `pychat ask "Como criar uma lista
@@ -42,14 +42,15 @@ em Python?"`. Design decisions are in `docs/adr/`, sample Q&A in `docs/examples.
 | Requisito | Entrega |
 |---|---|
 | Receber perguntas via texto | `pychat chat` (conversa interativa) e `pychat ask "..."` (pergunta única) |
-| LangChain gerencia o fluxo e integra com o LLM | pipeline LCEL `ChatPromptTemplate \| ChatOpenAI \| StrOutputParser` + memória de conversa |
+| LangChain gerencia o fluxo e integra com o LLM | pipeline LCEL `ChatPromptTemplate \| ChatOpenAI` + memória de conversa |
 | Responder com o modelo da OpenAI | `langchain-openai` (`gpt-4o` por padrão; qualquer modelo via `PYCHAT_MODEL`, ex.: `gpt-4`; qualquer endpoint compatível via `OPENAI_BASE_URL`) |
 | LangSmith (título da questão) | tracing opt-in com tags e metadados por execução |
 | Configurar corretamente a API da OpenAI | `OPENAI_API_KEY` via ambiente/`.env`, validada por `pychat check` |
 | Exemplos de perguntas e respostas | [docs/examples.md](docs/examples.md) (saídas reais) e [examples/questions.txt](examples/questions.txt) |
 
-Extras: streaming token a token com renderização Markdown, memória por sessão, erros
-traduzidos com dicas, `--raw` para pipes, Docker, CI, ADRs, testes sem rede.
+Extras: streaming ao vivo com renderização Markdown final (tabelas e código coloridos),
+memória por sessão, erros traduzidos com dicas, `--raw` para pipes, Docker, CI, ADRs,
+testes sem rede.
 
 ---
 
@@ -58,6 +59,8 @@ traduzidos com dicas, `--raw` para pipes, Docker, CI, ADRs, testes sem rede.
 ### Pré-requisitos
 
 Python 3.12+, Poetry >= 2.0 e uma chave da OpenAI (`OPENAI_API_KEY`).
+Rode os comandos **de dentro da pasta do projeto** (`poetry run pychat ...`): o `pychat`
+só existe no ambiente virtual dele e o `.env` é lido do diretório atual.
 
 ```bash
 poetry install
@@ -65,6 +68,15 @@ cp .env.example .env        # edite e coloque sua chave (o arquivo é ignorado p
 poetry run pychat check     # valida a configuração sem chamar nenhuma API
 poetry run pychat chat      # conversa interativa
 poetry run pychat ask "Como criar uma lista em Python?"
+```
+
+**Sem créditos na OpenAI?** Qualquer endpoint compatível serve. Exemplo com a API
+gratuita da Groq (foi o que o desenvolvimento usou), no `.env`:
+
+```text
+OPENAI_API_KEY=<chave da Groq>
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+PYCHAT_MODEL=openai/gpt-oss-120b
 ```
 
 Comandos do `chat`: `/help`, `/reset` (esquece a conversa), `/exit` (ou Ctrl-D).
@@ -191,10 +203,25 @@ imagem, limites de tamanho/tokens/histórico/retentativas, container não-root e
   `/v1/chat/completions` (incluindo streaming SSE), validando o corpo do request, o header
   `Authorization`, o parsing do stream e os erros HTTP 401/429/500; o mesmo servidor imita o
   LangSmith para provar que os traces são enviados.
-- **Live** (opt-in): uma chamada real com a pergunta do enunciado.
+- **Renderização**: testes de regressão garantem que o quadro do streaming é sempre
+  menor que o terminal (ver 3.9) e que o texto parcial é preservado em caso de falha.
+- **Live** (opt-in): uma chamada real com a pergunta do enunciado (executada com a
+  Groq durante o desenvolvimento).
 
 Tudo, exceto o live, roda offline e sem chave. `filterwarnings = error`, cobertura mínima
 de 95% e mypy estrito.
+
+### 3.9 Renderização no terminal (`cli/render.py`)
+
+O `rich.live.Live` redesenha o quadro no mesmo lugar, o que só funciona enquanto ele cabe
+na tela: quando a resposta passa da altura do terminal, as linhas que rolaram para cima
+não podem mais ser apagadas e cada atualização deixa outra cópia no histórico. A primeira
+versão sofria disso (visto em um terminal real). Agora, durante o streaming, mostra-se
+apenas a **cauda** da resposta (`_TailMarkdown`, sempre mais curta que o terminal, em um
+quadro transitório) e o Markdown completo é impresso **uma única vez** no final (também
+em caso de falha ou Ctrl-C, preservando o texto parcial). No Windows, a saída é forçada a
+UTF-8 na inicialização (`use_utf8_output`), pois streams redirecionados usam cp1252 e
+caracteres emitidos pelo modelo (como U+202F) derrubavam o programa.
 
 ### 3.8 Limitações conhecidas
 
@@ -211,8 +238,10 @@ de 95% e mypy estrito.
   com as tags `prompt:1.0` e `model:openai/gpt-oss-120b` e os metadados `session_id`,
   `history_messages` e `prompt_version`, além do prompt, da resposta, do tempo e dos
   tokens. Conferido manualmente pelo autor; não há teste automático contra o serviço real.
-- A execução real revelou e corrigiu dois defeitos (crash de codificação no Windows e
-  respostas cortadas sem aviso), descritos em `docs/examples.md`.
+- A execução real revelou e corrigiu **três defeitos** que testes offline não pegariam:
+  crash de codificação no Windows, respostas cortadas sem aviso e streaming que
+  duplicava texto no terminal (achado ao rodar no PowerShell). Ver `docs/examples.md` e 3.9.
+- O `pychat` só encontra o `.env` no diretório onde é executado.
 - Memória em processo (uma instância); avaliação automática no LangSmith é o próximo
   passo natural ([ADR 0003](docs/adr/0003-observability-and-evaluation.md)).
 - Modelos de raciocínio (o-series/GPT-5) não aceitam qualquer `temperature`; ajuste

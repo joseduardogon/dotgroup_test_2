@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from python_chatbot.core.exceptions import ConfigurationError
@@ -62,6 +62,19 @@ class Settings(BaseSettings):
     langsmith_api_key: SecretStr | None = Field(default=None, validation_alias="LANGSMITH_API_KEY")
     langsmith_project: str = Field(default="dotgroup-test-2", validation_alias="LANGSMITH_PROJECT")
     langsmith_endpoint: str | None = Field(default=None, validation_alias="LANGSMITH_ENDPOINT")
+
+    @field_validator("openai_base_url", "langsmith_endpoint", mode="after")
+    @classmethod
+    def _blank_url_means_default(cls, value: str | None) -> str | None:
+        """Treat an empty or whitespace-only URL (``OPENAI_BASE_URL=``) as "not set".
+
+        Args:
+            value: The configured URL.
+
+        Returns:
+            The trimmed URL, or ``None`` when it is blank.
+        """
+        return value.strip() or None if value is not None else None
 
     def require_openai_api_key(self) -> SecretStr:
         """Return the OpenAI key or fail with an actionable message.

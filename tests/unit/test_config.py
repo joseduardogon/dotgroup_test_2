@@ -100,3 +100,22 @@ def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     assert get_settings() is first
     assert get_settings().model == "first"
     get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_urls_mean_not_set(monkeypatch: pytest.MonkeyPatch, blank: str) -> None:
+    """Copying ``.env.example`` (which has an empty ``OPENAI_BASE_URL=``) keeps the defaults."""
+    monkeypatch.setenv("OPENAI_BASE_URL", blank)
+    monkeypatch.setenv("LANGSMITH_ENDPOINT", blank)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.openai_base_url is None
+    assert settings.langsmith_endpoint is None
+
+
+def test_urls_are_trimmed() -> None:
+    """Surrounding whitespace in a URL is dropped."""
+    settings = Settings(openai_base_url="  http://localhost:11434/v1  ", _env_file=None)
+
+    assert settings.openai_base_url == "http://localhost:11434/v1"
