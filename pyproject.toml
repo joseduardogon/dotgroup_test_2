@@ -24,7 +24,7 @@ pychat = "python_chatbot.cli.app:main"
 dev = [
     "pytest>=8.3,<9.0",
     "pytest-cov>=6.0,<8.0",
-    "ruff>=0.8",
+    "ruff>=0.16.9",
     "mypy>=1.13",
     "pre-commit>=4.0",
 ]
